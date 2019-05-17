@@ -8,34 +8,40 @@ output:
     vertical_layout: fill
 runtime: shiny
 ---
+# TODO Ajouter les contributions disponibles ici : https://granddebat.fr/pages/donnees-ouvertes
 
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
-require(shinydashboard)
-require(flexdashboard)
-require(knitr)
-require(dplyr)
-require(ggplot2)
-require(Rpdb)
+library(shinydashboard)
+library(flexdashboard)
+library(knitr)
+library(dplyr)
+library(ggplot2)
+library(Rpdb)
 
 # Pour les graphiques "sympas"
-require(htmltools)
-require(htmlwidgets)
-require(metricsgraphics)
-require(RColorBrewer)
-require(plotly)
-require(DT)
-require(SnowballC)
-require(wordcloud)
+library(htmltools)
+library(htmlwidgets)
+library(metricsgraphics)
+library(RColorBrewer)
+library(plotly)
+library(DT)
+library(SnowballC)
+library(wordcloud)
+library(leaflet)
 
 # Chargement des données
 filecache <- "cache/listevt.Rdata"
 timeout_cache <- 90 # durée de vie du fichier dans le cache
 
-if (file.exists(filecache) & difftime(Sys.time(),file.info(filecache)$mtime) < 1/24/60*timeout_cache)
-    load(filecache) else
-      source("readdata.R") 
+if(file.exists(filecache) & difftime(Sys.time(),file.info(filecache)$mtime) < 1/24/60*timeout_cache){
+  load(filecache) 
+}
+else{
+  source("readdata.R")
+
+}
 
 weekDaysOrder = c("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche")
 
@@ -133,7 +139,17 @@ Row
 ### Liste des communes participants
 
 ```{r dtcity, echo=FALSE}
-datatable(dtcity, options=list(pageLength = 10))
+
+map_data = listevt[,c("node.lat", "node.lng")]
+DT_data = listevt %>% group_by_(COMMUNE) %>% count(name = "Nombre d'évènements")
+
+leaflet() %>%
+  addTiles() %>%
+  addMarkers(data = map_data, lat = ~node.lat, lng = ~node.lng, clusterOptions = markerClusterOptions(), 
+             label = mytext)
+
+DT::datatable(DT_data)
+
 ```
 
 
@@ -149,6 +165,11 @@ set.seed(1234)
 wordcloud(words = dfmots$word, freq = dfmots$freq, min.freq = 1,
           max.words=200, random.order=FALSE, rot.per=0.35, 
           colors=brewer.pal(8, "Accent"))
+
+# plot_ly(data = dfmots[1:20,], x = ~word, y = ~freq) %>%
+#   layout(yaxis = list(title = 'Fréquence d\'utilisation du mot'), xaxis = list(title = 'Mot'))
+
+kableExtra::kable(x = dfmots[order(dfmots$freq)>10,])
 ```
 
 

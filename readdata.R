@@ -1,7 +1,9 @@
 require(httr)
 require(jsonlite)
-require(dplyr)
-
+require(tidyverse)
+library(readr)
+library(ggplot2)
+library(plotly)
 filecache <- "cache/listevt.Rdata"
 
 # Définition des paramétres --------------------------------------------------
@@ -58,32 +60,65 @@ listevt$Commune[r != -1] <- toupper(substr(listevt$node.fullAddress[r != -1], r2
 # Ne pas charger trop tôt le module tm car fonction "content" masqué
 require(tm)
 
-# Construction du corpus de mot sur les titres
-docs <- Corpus(VectorSource(listevt$node.title))
+# Construction du tm:: Corpus de mot sur les titres
+docs <- tm:: Corpus(tm::VectorSource(listevt$node.title))
 toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
-docs <- tm_map(docs, toSpace, "/")
-docs <- tm_map(docs, toSpace, "@")
-docs <- tm_map(docs, toSpace, "\\|")
+docs <- tm::tm_map(docs, toSpace, "/")
+docs <- tm::tm_map(docs, toSpace, "@")
+docs <- tm::tm_map(docs, toSpace, "\\|")
 # Convertir le texte en minuscule
-docs <- tm_map(docs, content_transformer(tolower))
+docs <- tm::tm_map(docs, content_transformer(tolower))
 # Supprimer les nombres
-docs <- tm_map(docs, removeNumbers)
+docs <- tm::tm_map(docs, removeNumbers)
 # Supprimer les mots vides anglais
-docs <- tm_map(docs, removeWords, stopwords("french"))
+docs <- tm::tm_map(docs, removeWords, stopwords("french"))
 # Supprimer votre propre liste de mots non désirés
-#docs <- tm_map(docs, removeWords, c("blabla1", "blabla2")) 
+#docs <- tm::tm_map(docs, removeWords, c("blabla1", "blabla2")) 
 # Supprimer les ponctuations
-docs <- tm_map(docs, removePunctuation)
+docs <- tm::tm_map(docs, removePunctuation)
 # Supprimer les espaces vides supplémentaires
-docs <- tm_map(docs, stripWhitespace)
+docs <- tm::tm_map(docs, stripWhitespace)
 # Text stemming
 # docs <- tm_map(docs, stemDocument)
 
-dtm <- TermDocumentMatrix(docs)
+dtm <- tm::TermDocumentMatrix(docs)
 mmots <- as.matrix(dtm)
 tmots <- sort(rowSums(mmots),decreasing=TRUE)
 dfmots <- data.frame(word = names(tmots),freq=tmots)
 
+# A partir d'ici on peut formatter les données en open data trouvées sur 
+# https://granddebat.fr/pages/donnees-ouvertes
+# TODO trouver un moyen de lire les données sans conserver le csv pour ne pas trop charger le cache
+if(file.exist("cache/LA_TRANSITION_ECOLOGIQUE.csv")){
+  download.file(url = "http://opendata.auth-6f31f706db6f4a24b55f42a6a79c5086.storage.sbg5.cloud.ovh.net/2019-03-21/LA_TRANSITION_ECOLOGIQUE.csv",
+                destfile = "cache/LA_TRANSITION_ECOLOGIQUE.csv") 
+}
+
+
+LA_TRANSITION_ECOLOGIQUE <- read_csv("cache/LA_TRANSITION_ECOLOGIQUE.csv")
+
+test = table(LA_TRANSITION_ECOLOGIQUE[,20]) %>% enframe()
+
+# ggplot
+# ggplot(test, aes(x=as.factor(name), y = value )) + geom_bar(stat = "identity", 
+#                                                             color="blue", fill=rgb(0.1,0.4,0.5,0.7)) +
+#   scale_fill_manual(values = c("red", "green"))
+
+# metricsgraphics
+# mjs_plot(test, width=500, height=400) %>%
+#   mjs_histogram(bar_margin=2) %>%
+#   mjs_labs(x_label="Heure",y_label="Nombre d'événements")
+
+# plotly
+
+titre = str_sub(colnames(LA_TRANSITION_ECOLOGIQUE)[20], 
+                start = str_locate(colnames(LA_TRANSITION_ECOLOGIQUE)[20], pattern = "-")[1]+1,end = nchar(colnames(LA_TRANSITION_ECOLOGIQUE)[20]) )
+p <- plot_ly(test, x = ~name, y = ~value, type = 'bar', name = ~name) %>%
+  layout(title = titre,
+         xaxis = list(title = "Réponse"),
+         yaxis = list(title = "Nombre de réponses"))
+
 # Sauvegarde dans un fichier "cache"
 save(listevt,totalcount, dfmots, file=filecache)
-
+# saveRDS(totalcount, "cache/totalcount.rds")
+# saveRDS(listevt, "cache/listevt.rds")
